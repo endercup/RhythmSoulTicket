@@ -52,23 +52,17 @@ html, body {
   display: none;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-weight: bold;
-  z-index: 10;
   text-align: center;
+  font-weight: bold;
+  color: white;
+  z-index: 20;
 }
 
 #modal.success { background: rgba(0,160,0,.9); }
-#modal.error { background: rgba(180,0,0,.9); }
+#modal.error   { background: rgba(180,0,0,.9); }
 
-.vip {
-  color: gold;
-  font-size: 42px;
-}
-
-.normal {
-  font-size: 32px;
-}
+.vip { color: gold; font-size: 42px; }
+.normal { font-size: 32px; }
 </style>
 </head>
 
@@ -83,28 +77,47 @@ html, body {
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbyciRsJTnVaenFo3XTSxR4rk9GTsT5Kj8GZkIn7tOW_hKpZjngTu3-NxO_Am77v598Orw/exec";
 const modal = document.getElementById("modal");
+
 let scanner;
 let locked = false;
+let resolved = false;
 
-function show(result) {
-  modal.className = "";
+function showSuccess(result) {
+  modal.className = "success";
   modal.style.display = "flex";
+  modal.innerHTML = result.vip
+    ? `<div class="vip">VIP<br>入場成功</div>`
+    : `<div class="normal">入場成功</div>`;
+
+  setTimeout(reset, 1200);
+}
+
+function showError() {
+  modal.className = "error";
+  modal.style.display = "flex";
+  modal.innerHTML = `<div class="normal">無效票券<br>或已使用</div>`;
+
+  setTimeout(reset, 1200);
+}
+
+function reset() {
+  modal.style.display = "none";
+  locked = false;
+  resolved = false;
+  scanner.start({ facingMode: "environment" }, { fps: 10 }, onScan);
+}
+
+function handleResult(result) {
+  if (resolved) return;
 
   if (result.status === "OK") {
-    modal.classList.add("success");
-    modal.innerHTML = result.vip
-      ? `<div class="vip">VIP<br>入場成功</div>`
-      : `<div class="normal">入場成功</div>`;
-  } else {
-    modal.classList.add("error");
-    modal.innerHTML = `<div class="normal">無效票券<br>或已使用</div>`;
+    resolved = true;
+    showSuccess(result);
+    return;
   }
 
-  setTimeout(() => {
-    modal.style.display = "none";
-    locked = false;
-    scanner.start({ facingMode: "environment" }, { fps: 10 }, onScan);
-  }, 1200);
+  // 只有在「還沒成功過」的情況下才顯示錯誤
+  showError();
 }
 
 function onScan(text) {
@@ -114,8 +127,8 @@ function onScan(text) {
   scanner.stop().then(() => {
     fetch(API_URL + "?id=" + encodeURIComponent(text))
       .then(r => r.json())
-      .then(show)
-      .catch(() => show({ status: "ERROR" }));
+      .then(handleResult)
+      .catch(showError);
   });
 }
 
