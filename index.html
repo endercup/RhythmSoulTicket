@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>浪人音魂 驗票系統</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+  body {
+    margin: 0;
+    background: #000;
+    color: #fff;
+    font-family: system-ui, sans-serif;
+    text-align: center;
+  }
+  #reader {
+    width: 100vw;
+    height: 100vh;
+  }
+  #result {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    font-size: 2.2em;
+    z-index: 10;
+  }
+  .success { background: #1fa84f; }
+  .used { background: #d64545; }
+  .invalid { background: #666; }
+  .duplicate { background: #c9a400; }
+  .vip {
+    font-size: 1.4em;
+    margin-top: 10px;
+    font-weight: bold;
+  }
+</style>
+</head>
+
+<body>
+
+<div id="reader"></div>
+
+<div id="result">
+  <div id="message"></div>
+  <div id="vip" class="vip"></div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyciRsJTnVaenFo3XTSxR4rk9GTsT5Kj8GZkIn7tOW_hKpZjngTu3-NxO_Am77v598Orw/exec";
+
+let scannerActive = true;
+
+function showResult(type, text, vip=false) {
+  const result = document.getElementById("result");
+  const message = document.getElementById("message");
+  const vipBox = document.getElementById("vip");
+
+  result.className = "";
+  result.classList.add(type);
+  message.textContent = text;
+  vipBox.textContent = vip ? "VIP" : "";
+
+  result.style.display = "flex";
+
+  setTimeout(() => {
+    result.style.display = "none";
+    scannerActive = true;
+  }, 1500);
+}
+
+function onScanSuccess(decodedText) {
+  if (!scannerActive) return;
+  scannerActive = false;
+
+  fetch(`${BACKEND_URL}?id=${encodeURIComponent(decodedText)}`)
+    .then(res => res.json())
+    .then(data => {
+      switch (data.status) {
+        case "success":
+          showResult("success", "入場成功", data.vip);
+          break;
+        case "used":
+          showResult("used", "已使用", data.vip);
+          break;
+        case "duplicate":
+          showResult("duplicate", "重複掃描");
+          break;
+        default:
+          showResult("invalid", "無效票");
+      }
+    })
+    .catch(() => {
+      showResult("invalid", "連線錯誤");
+    });
+}
+
+new Html5Qrcode("reader").start(
+  { facingMode: "environment" },
+  { fps: 10, qrbox: 250 },
+  onScanSuccess
+);
+</script>
+
+</body>
+</html>
