@@ -11,14 +11,12 @@ html, body {
   padding: 0;
   height: 100%;
   background: black;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont;
 }
 
 #camera-container {
   position: relative;
   width: 100vw;
   height: 100svh;
-  overflow: hidden;
 }
 
 #qr-reader {
@@ -32,7 +30,6 @@ html, body {
   object-fit: cover !important;
 }
 
-/* 綠色掃描框 */
 #scan-overlay {
   position: absolute;
   inset: 0;
@@ -40,7 +37,6 @@ html, body {
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  z-index: 10;
 }
 
 .scan-box {
@@ -50,34 +46,27 @@ html, body {
   border-radius: 12px;
 }
 
-/* 彈出式提示 */
 #modal {
   position: absolute;
   inset: 0;
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 50;
   color: white;
   font-weight: bold;
+  z-index: 10;
   text-align: center;
 }
 
-#modal.success {
-  background: rgba(0, 160, 0, 0.88);
-}
+#modal.success { background: rgba(0,160,0,.9); }
+#modal.error { background: rgba(180,0,0,.9); }
 
-#modal.error {
-  background: rgba(180, 0, 0, 0.88);
-}
-
-#modal .vip {
+.vip {
   color: gold;
-  font-size: 40px;
-  line-height: 1.2;
+  font-size: 42px;
 }
 
-#modal .normal {
+.normal {
   font-size: 32px;
 }
 </style>
@@ -86,80 +75,53 @@ html, body {
 <body>
 <div id="camera-container">
   <div id="qr-reader"></div>
-
-  <div id="scan-overlay">
-    <div class="scan-box"></div>
-  </div>
-
+  <div id="scan-overlay"><div class="scan-box"></div></div>
   <div id="modal"></div>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
-
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbyciRsJTnVaenFo3XTSxR4rk9GTsT5Kj8GZkIn7tOW_hKpZjngTu3-NxO_Am77v598Orw/exec";
-
 const modal = document.getElementById("modal");
 let scanner;
-let scanningEnabled = true;
+let locked = false;
 
-function showModal(result) {
+function show(result) {
   modal.className = "";
   modal.style.display = "flex";
 
   if (result.status === "OK") {
     modal.classList.add("success");
-
-    if (result.vip === true) {
-      modal.innerHTML = `
-        <div class="vip">
-          VIP<br>
-          入場成功
-        </div>
-      `;
-    } else {
-      modal.innerHTML = `
-        <div class="normal">
-          入場成功
-        </div>
-      `;
-    }
+    modal.innerHTML = result.vip
+      ? `<div class="vip">VIP<br>入場成功</div>`
+      : `<div class="normal">入場成功</div>`;
   } else {
     modal.classList.add("error");
-    modal.innerHTML = `
-      <div class="normal">
-        無效票券<br>
-        或已使用
-      </div>
-    `;
+    modal.innerHTML = `<div class="normal">無效票券<br>或已使用</div>`;
   }
 
   setTimeout(() => {
     modal.style.display = "none";
-    scanningEnabled = true;
-  }, 1000);
+    locked = false;
+    scanner.start({ facingMode: "environment" }, { fps: 10 }, onScan);
+  }, 1200);
 }
 
-function handleScan(text) {
-  if (!scanningEnabled) return;
-  scanningEnabled = false;
+function onScan(text) {
+  if (locked) return;
+  locked = true;
 
-  fetch(API_URL + "?id=" + encodeURIComponent(text))
-    .then(res => res.json())
-    .then(data => {
-      showModal(data);
-    })
-    .catch(() => {
-      showModal({ status: "ERROR" });
-    });
+  scanner.stop().then(() => {
+    fetch(API_URL + "?id=" + encodeURIComponent(text))
+      .then(r => r.json())
+      .then(show)
+      .catch(() => show({ status: "ERROR" }));
+  });
 }
 
 scanner = new Html5Qrcode("qr-reader");
-scanner.start(
-  { facingMode: "environment" },
-  { fps: 10, disableFlip: true },
-  handleScan
-);
+scanner.start({ facingMode: "environment" }, { fps: 10 }, onScan);
 </script>
 </body>
 </html>
+
