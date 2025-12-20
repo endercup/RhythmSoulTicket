@@ -19,12 +19,13 @@
       width: 100vw;
       height: 100svh;
       overflow: hidden;
+      background: black;
     }
 
-    video {
+    /* html5-qrcode 會自己塞 video */
+    #qr-reader {
       width: 100%;
       height: 100%;
-      object-fit: cover;
     }
 
     #scan-overlay {
@@ -34,6 +35,7 @@
       align-items: center;
       justify-content: center;
       pointer-events: none;
+      z-index: 10;
     }
 
     .scan-box {
@@ -41,6 +43,7 @@
       height: 260px;
       border: 3px solid #00ff88;
       border-radius: 12px;
+      box-sizing: border-box;
     }
 
     #result {
@@ -51,6 +54,7 @@
       font-size: 22px;
       font-weight: bold;
       color: white;
+      z-index: 20;
     }
 
     .success {
@@ -70,7 +74,7 @@
 
 <body>
   <div id="camera-container">
-    <video id="video" autoplay playsinline></video>
+    <div id="qr-reader"></div>
 
     <div id="scan-overlay">
       <div class="scan-box"></div>
@@ -79,13 +83,11 @@
     <div id="result"></div>
   </div>
 
-  <!-- QR Scanner library -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <script>
-    const videoElem = document.getElementById("video");
-    const resultElem = document.getElementById("result");
     const container = document.getElementById("camera-container");
+    const resultElem = document.getElementById("result");
 
     const API_URL = "https://script.google.com/macros/s/AKfycbyciRsJTnVaenFo3XTSxR4rk9GTsT5Kj8GZkIn7tOW_hKpZjngTu3-NxO_Am77v598Orw/exec";
 
@@ -136,15 +138,15 @@
         });
     }
 
-    const html5QrCode = new Html5Qrcode("video");
+    const qrCodeScanner = new Html5Qrcode("qr-reader");
 
     Html5Qrcode.getCameras().then(cameras => {
-      if (cameras.length === 0) {
+      if (!cameras || cameras.length === 0) {
         resultElem.textContent = "找不到相機";
         return;
       }
 
-      html5QrCode.start(
+      qrCodeScanner.start(
         cameras[0].id,
         { fps: 10, qrbox: 260 },
         handleScan
@@ -153,4 +155,3 @@
   </script>
 </body>
 </html>
-
