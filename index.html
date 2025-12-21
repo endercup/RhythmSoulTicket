@@ -35,7 +35,7 @@ html, body {
   pointer-events: none;
   z-index: 10;
 }
-/* 我們自己的固定綠色掃描框（絕對不會閃爍） */
+/* 固定綠色掃描框（穩定不閃） */
 .scan-box {
   width: 300px;
   height: 300px;
@@ -45,11 +45,13 @@ html, body {
   background: transparent;
 }
 
-/* 強制隱藏 html5-qrcode 內建的所有 overlay 元素（包括四角線、陰影區、綠色閃爍等） */
+/* 徹底隱藏 html5-qrcode 所有內建視覺元素（四角綠白線、陰影、laser 等） */
+#qr-reader > div,
 #qr-reader canvas,
 #qr-reader .qr-shaded-region,
-#qr-reader div[style*="border"] ,
-#qr-reader div[class*="qr-"] {
+#qr-reader [class*="qr-"],
+#qr-reader [style*="border"],
+#qr-reader [style*="position: absolute"] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -87,7 +89,6 @@ html, body {
   <div id="scan-overlay">
     <div class="scan-box"></div>
   </div>
-
   <div id="full-result"></div>
 </div>
 
@@ -100,11 +101,11 @@ let scanner;
 let locked = false;
 let lastScanTime = 0;
 
-/* 震動 */
+/* 震動回饋 */
 function vibrateSuccess() { if (navigator.vibrate) navigator.vibrate(300); }
 function vibrateError() { if (navigator.vibrate) navigator.vibrate([100, 100, 100]); }
 
-/* 全黑結果畫面 2 秒 */
+/* 全黑結果畫面 - 只顯示 500ms */
 function showFullResult(isSuccess, isVip = false, message = "") {
   if (isSuccess) {
     vibrateSuccess();
@@ -123,8 +124,8 @@ function showFullResult(isSuccess, isVip = false, message = "") {
 
   setTimeout(() => {
     fullResult.style.display = "none";
-    locked = false;
-  }, 50);
+    locked = false;  // 0.5 秒後解鎖，可立即掃下一張
+  }, 500);
 }
 
 /* API 驗證 */
@@ -148,7 +149,7 @@ async function verifyTicket(id) {
   }
 }
 
-/* 掃描回調 */
+/* 掃描回調 - 防重複間隔 50ms（極快） */
 function onScan(decodedText) {
   const now = Date.now();
   
@@ -162,7 +163,7 @@ function onScan(decodedText) {
   verifyTicket(decodedText.trim());
 }
 
-/* 掃描設定（保留 qrbox 給解碼用，但強制隱藏所有內建視覺元素） */
+/* 掃描設定 */
 const config = {
   fps: 35,
   qrbox: { width: 280, height: 280 },
@@ -174,7 +175,7 @@ const config = {
   }
 };
 
-/* 強制後置相機 */
+/* 強制使用後置相機 */
 Html5Qrcode.getCameras().then(cameras => {
   if (cameras && cameras.length) {
     let camera = cameras.find(cam => 
