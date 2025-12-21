@@ -110,7 +110,7 @@ function reset() {
 function handleResult(result) {
   if (resolved) return;
 
-  if (result.status === "OK") {
+  if (result.status == "OK") {
     resolved = true;
     showSuccess(result);
     return;
