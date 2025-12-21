@@ -80,24 +80,27 @@ const modal = document.getElementById("modal");
 
 let scanner;
 let locked = false;
-let resolved = false;
+let finished = false; // 成功或失敗後鎖死狀態
 
 function showSuccess(result) {
+  finished = true;
+
   modal.className = "success";
   modal.style.display = "flex";
-  const vipVal = result && result.vip;
-  const isVip = vipVal === true || vipVal === 1 || vipVal === '1' || String(vipVal).toLowerCase() === 'true';
-  modal.innerHTML = isVip
+  modal.innerHTML = result.vip
     ? `<div class="vip">VIP<br>入場成功</div>`
     : `<div class="normal">入場成功</div>`;
 
   setTimeout(reset, 1200);
 }
 
-function showError() {
+function showError(message = "無效票券<br>或已使用") {
+  if (finished) return; // 成功後不允許任何錯誤覆蓋
+
+  finished = true;
   modal.className = "error";
   modal.style.display = "flex";
-  modal.innerHTML = `<div class="normal">無效票券<br>或已使用</div>`;
+  modal.innerHTML = `<div class="normal">${message}</div>`;
 
   setTimeout(reset, 1200);
 }
@@ -105,47 +108,51 @@ function showError() {
 function reset() {
   modal.style.display = "none";
   locked = false;
-  resolved = false;
-  scanner.start({ facingMode: "environment" }, { fps: 10 }, onScan);
+  finished = false;
+
+  scanner.start(
+    { facingMode: "environment" },
+    { fps: 10 },
+    onScan
+  );
 }
 
 function handleResult(result) {
-  if (resolved) return;
-
-  // 支援 API 回傳陣列或物件
-  if (Array.isArray(result) && result.length) result = result[0];
-
-  console.log('handleResult =>', result);
-
-  const rawStatus = result && (result.status || result.Status || result.code || result.result);
-  if (rawStatus !== undefined) {
-    const s = typeof rawStatus === 'string' ? rawStatus.toUpperCase() : rawStatus;
-    if (s === 'OK' || s === 'TRUE' || s === 1 || s === true) {
-      resolved = true;
-      showSuccess(result);
-      return;
-    }
+  if (!result || !result.status) {
+    showError();
+    return;
   }
 
-  // 只有在「還沒成功過」的情況下才顯示錯誤
+  if (result.status === "OK") {
+    showSuccess(result);
+    return;
+  }
+
+  if (result.status === "USED") {
+    showError("票券已使用");
+    return;
+  }
+
   showError();
 }
 
 function onScan(text) {
-  if (locked) return;
+  if (locked || finished) return;
+
   locked = true;
 
-  scanner.stop().then(() => {
-    fetch(API_URL + "?id=" + encodeURIComponent(text))
-      .then(r => r.json())
-      .then(handleResult)
-      .catch(showError);
-  });
+  fetch(API_URL + "?id=" + encodeURIComponent(text))
+    .then(res => res.json())
+    .then(handleResult)
+    .catch(() => showError("系統錯誤"));
 }
 
 scanner = new Html5Qrcode("qr-reader");
-scanner.start({ facingMode: "environment" }, { fps: 10 }, onScan);
+scanner.start(
+  { facingMode: "environment" },
+  { fps: 10 },
+  onScan
+);
 </script>
 </body>
 </html>
-
