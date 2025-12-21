@@ -96,10 +96,10 @@ let lastScanTime = 0;
  * 震動回饋
  **********************/
 function vibrateSuccess() {
-  if (navigator.vibrate) navigator.vibrate(300);
+  navigator.vibrate(300);
 }
 function vibrateError() {
-  if (navigator.vibrate) navigator.vibrate([100, 100, 100]);
+  navigator.vibrate([100, 100, 100]);
 }
 
 /**********************
@@ -124,7 +124,7 @@ function showFullResult(isSuccess, isVip = false, message = "") {
   setTimeout(() => {
     fullResult.style.display = "none";
     locked = false;  // 2秒後解鎖，可掃下一張
-  }, 2000);  // ← 改成 2 秒
+  }, 1000);  // ← 改成 2 秒
 }
 
 /**********************
@@ -157,7 +157,7 @@ function onScan(decodedText) {
   const now = Date.now();
   
   // 防抖：同一張票在 500ms 內不重複處理（更靈敏）
-  if (now - lastScanTime < 100 && decodedText === scanner.lastScanned) return;
+  if (now - lastScanTime < 50 && decodedText === scanner.lastScanned) return;
   
   if (locked) return;
   locked = true;
