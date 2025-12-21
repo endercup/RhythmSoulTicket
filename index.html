@@ -35,14 +35,24 @@ html, body {
   pointer-events: none;
   z-index: 10;
 }
-/* 固定綠色掃描框（不再閃爍） */
+/* 我們自己的固定綠色掃描框（絕對不會閃爍） */
 .scan-box {
   width: 300px;
   height: 300px;
   border: 5px solid #00ff88;
   border-radius: 20px;
   box-shadow: 0 0 40px rgba(0, 255, 136, 0.8);
-  background: transparent; /* 確保內部透明 */
+  background: transparent;
+}
+
+/* 強制隱藏 html5-qrcode 內建的所有 overlay 元素（包括四角線、陰影區、綠色閃爍等） */
+#qr-reader canvas,
+#qr-reader .qr-shaded-region,
+#qr-reader div[style*="border"] ,
+#qr-reader div[class*="qr-"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
 }
 
 #full-result {
@@ -74,7 +84,6 @@ html, body {
 <body>
 <div id="camera-container">
   <div id="qr-reader"></div>
-  <!-- 我們自己畫的固定綠色框 -->
   <div id="scan-overlay">
     <div class="scan-box"></div>
   </div>
@@ -115,7 +124,7 @@ function showFullResult(isSuccess, isVip = false, message = "") {
   setTimeout(() => {
     fullResult.style.display = "none";
     locked = false;
-  }, 500);
+  }, 50);
 }
 
 /* API 驗證 */
@@ -153,20 +162,16 @@ function onScan(decodedText) {
   verifyTicket(decodedText.trim());
 }
 
-/* 關鍵設定：關閉內建 qrbox 繪製，避免閃爍 */
+/* 掃描設定（保留 qrbox 給解碼用，但強制隱藏所有內建視覺元素） */
 const config = {
   fps: 35,
-  qrbox: { width: 260, height: 260 },        // 仍指定掃描區域大小（給解碼用）
+  qrbox: { width: 280, height: 280 },
   aspectRatio: 1,
   disableFlip: true,
   formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
   experimentalFeatures: {
     useBarCodeDetectorIfSupported: true
-  },
-  // 這行是關鍵！關閉 html5-qrcode 自己畫的白色/半透明框
-  showOverlay: false,
-  // 也可以加這行確保不畫任何內建元素
-  disableAnimations: true
+  }
 };
 
 /* 強制後置相機 */
