@@ -69,19 +69,30 @@ html, body {
 <body>
 <div id="camera-container">
   <div id="qr-reader"></div>
-  <div id="scan-overlay"><div class="scan-box"></div></div>
+  <div id="scan-overlay">
+    <div class="scan-box"></div>
+  </div>
   <div id="modal"></div>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
+/**********************
+ * 設定
+ **********************/
 const API_URL = "https://script.google.com/macros/s/AKfycbyciRsJTnVaenFo3XTSxR4rk9GTsT5Kj8GZkIn7tOW_hKpZjngTu3-NxO_Am77v598Orw/exec";
 const modal = document.getElementById("modal");
 
+/**********************
+ * 狀態
+ **********************/
 let scanner;
 let locked = false;
-let finished = false; // 成功或失敗後鎖死狀態
+let finished = false;
 
+/**********************
+ * UI
+ **********************/
 function showSuccess(result) {
   finished = true;
 
@@ -95,7 +106,7 @@ function showSuccess(result) {
 }
 
 function showError(message = "無效票券<br>或已使用") {
-  if (finished) return; // 成功後不允許任何錯誤覆蓋
+  if (finished) return;
 
   finished = true;
   modal.className = "error";
@@ -105,6 +116,9 @@ function showError(message = "無效票券<br>或已使用") {
   setTimeout(reset, 1200);
 }
 
+/**********************
+ * 重置掃描
+ **********************/
 function reset() {
   modal.style.display = "none";
   locked = false;
@@ -117,6 +131,9 @@ function reset() {
   );
 }
 
+/**********************
+ * API 回傳處理
+ **********************/
 function handleResult(result) {
   if (!result || !result.status) {
     showError();
@@ -133,13 +150,22 @@ function handleResult(result) {
     return;
   }
 
+  if (result.status === "DUPLICATE") {
+    // 同一張剛成功驗過，不顯示錯誤
+    return;
+  }
+
   showError();
 }
 
+/**********************
+ * 掃描成功
+ **********************/
 function onScan(text) {
   if (locked || finished) return;
 
   locked = true;
+  scanner.stop(); // 🔴 關鍵：成功掃到後立刻停掉鏡頭
 
   fetch(API_URL + "?id=" + encodeURIComponent(text))
     .then(res => res.json())
@@ -147,6 +173,9 @@ function onScan(text) {
     .catch(() => showError("系統錯誤"));
 }
 
+/**********************
+ * 啟動
+ **********************/
 scanner = new Html5Qrcode("qr-reader");
 scanner.start(
   { facingMode: "environment" },
