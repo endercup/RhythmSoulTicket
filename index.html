@@ -124,7 +124,7 @@ function showFullResult(isSuccess, isVip = false, message = "") {
   setTimeout(() => {
     fullResult.style.display = "none";
     locked = false;  // 2秒後解鎖，可掃下一張
-  }, 1000);  // ← 改成 2 秒
+  }, 500);  // ← 改成 2 秒
 }
 
 /**********************
@@ -157,7 +157,7 @@ function onScan(decodedText) {
   const now = Date.now();
   
   // 防抖：同一張票在 500ms 內不重複處理（更靈敏）
-  if (now - lastScanTime < 50 && decodedText === scanner.lastScanned) return;
+  if (now - lastScanTime < 10 && decodedText === scanner.lastScanned) return;
   
   if (locked) return;
   locked = true;
@@ -172,7 +172,7 @@ function onScan(decodedText) {
  **********************/
 const config = {
   fps: 35,
-  qrbox: { width: 260, height: 260 },
+  qrbox: { width: 230, height: 230 },
   aspectRatio: 1,
   disableFlip: true,
   formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
