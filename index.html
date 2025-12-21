@@ -41,23 +41,32 @@ html, body {
   border-radius: 16px;
   box-shadow: 0 0 30px rgba(0, 255, 136, 0.6);
 }
-#modal {
+
+/* 全螢幕結果覆蓋層（純黑背景） */
+#full-result {
   position: absolute;
   inset: 0;
   display: none;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  text-align: center;
   font-weight: bold;
   color: white;
-  z-index: 20;
-  flex-direction: column;
-  gap: 20px;
+  z-index: 30;
+  background: black; /* 純黑背景 */
 }
-#modal.success { background: rgba(0, 160, 0, 0.92); }
-#modal.error { background: rgba(180, 0, 0, 0.92); }
-.vip { color: gold; font-size: 48px; }
-.normal { font-size: 36px; }
+.vip {
+  color: gold;
+  font-size: 56px;
+  text-shadow: 0 0 20px gold;
+}
+.normal {
+  font-size: 48px;
+}
+.checkmark {
+  font-size: 80px;
+  margin-bottom: 20px;
+}
 </style>
 </head>
 <body>
@@ -66,7 +75,9 @@ html, body {
   <div id="scan-overlay">
     <div class="scan-box"></div>
   </div>
-  <div id="modal"></div>
+
+  <!-- 全黑結果畫面，停留 1 秒 -->
+  <div id="full-result"></div>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -75,85 +86,73 @@ html, body {
  * 設定
  **********************/
 const API_URL = "https://script.google.com/macros/s/AKfycbz4JomfGpFnOJYwcAJTyMiEulVqtlPHQNx9rID7Ixo7I5zReBqMBdrn_JSxdCHxQjbT/exec";
-const modal = document.getElementById("modal");
+const fullResult = document.getElementById("full-result");
 
 let scanner;
 let locked = false;
 let lastScanTime = 0;
 
 /**********************
- * 震動函數（支援 Android 與 iPhone）
+ * 震動回饋
  **********************/
 function vibrateSuccess() {
-  // 成功：長震 300ms
-  if (navigator.vibrate) {
-    navigator.vibrate(300);
-  }
+  if (navigator.vibrate) navigator.vibrate(300);
 }
-
 function vibrateError() {
-  // 失敗：短震兩下（100ms + 間隔 100ms + 100ms）
-  if (navigator.vibrate) {
-    navigator.vibrate([100, 100, 100]);
+  if (navigator.vibrate) navigator.vibrate([100, 100, 100]);
+}
+
+/**********************
+ * 顯示全黑結果畫面（停留 1000ms = 1秒）
+ **********************/
+function showFullResult(isSuccess, isVip = false, message = "") {
+  if (isSuccess) {
+    vibrateSuccess();
+    fullResult.innerHTML = `
+      <div class="checkmark">✓</div>
+      ${isVip ? '<div class="vip">VIP<br>入場成功</div>' : '<div class="normal">入場成功</div>'}
+    `;
+  } else {
+    vibrateError();
+    fullResult.innerHTML = `
+      <div class="normal">${message || '無效或已使用'}</div>
+    `;
   }
+
+  fullResult.style.display = "flex";
+
+  setTimeout(() => {
+    fullResult.style.display = "none";
+    locked = false;  // 1秒後解鎖，繼續可掃下一張
+  }, 1000);
 }
 
 /**********************
- * UI 顯示 + 震動
- **********************/
-function showSuccess(isVip) {
-  vibrateSuccess();  // ← 成功震動
-  modal.className = "success";
-  modal.style.display = "flex";
-  modal.innerHTML = isVip
-    ? `<div class="vip">VIP<br>入場成功 ✓</div>`
-    : `<div class="normal">入場成功 ✓</div>`;
-  setTimeout(resetScanner, 800);
-}
-
-function showError(message = "無效或已使用") {
-  vibrateError();  // ← 失敗震動
-  modal.className = "error";
-  modal.style.display = "flex";
-  modal.innerHTML = `<div class="normal">${message}</div>`;
-  setTimeout(resetScanner, 800);
-}
-
-/**********************
- * 重啟掃描（相機持續開著）
- **********************/
-function resetScanner() {
-  modal.style.display = "none";
-  locked = false;
-}
-
-/**********************
- * API 處理
+ * API 驗證
  **********************/
 async function verifyTicket(id) {
   try {
-    const res = await fetch(API_URL + "?id=" + encodeURIComponent(id), {
-      cache: "no-cache"
-    });
+    const res = await fetch(API_URL + "?id=" + encodeURIComponent(id), { cache: "no-cache" });
     const result = await res.json();
 
     if (result.status === "OK") {
-      showSuccess(result.vip);
+      showFullResult(true, result.vip);
     } else if (result.status === "USED") {
-      showError("票券已使用");
+      showFullResult(false, false, "票券已使用");
     } else if (result.status === "DUPLICATE") {
-      // 剛驗過的同一張，不顯示不震動
+      // 剛驗過的同一張，不顯示任何東西
+      locked = false;
     } else {
-      showError();
+      showFullResult(false);
     }
   } catch (err) {
     vibrateError();
-    showError("網路錯誤");
+    showFullResult(false, false, "網路錯誤");
   }
 }
 
 /**********************
- * 掃描成功回調
+ * 掃描成功
  **********************/
 function onScan(decodedText) {
   const now = Date.now();
@@ -170,36 +169,45 @@ function onScan(decodedText) {
 }
 
 /**********************
- * 啟動掃描器（最佳效能）
+ * 啟動掃描器（強制後置相機 + 最佳效能）
  **********************/
 const config = {
   fps: 30,
   qrbox: { width: 260, height: 260 },
   aspectRatio: 1,
-  disableFlip: false,
+  disableFlip: true,  // 禁止鏡像翻轉（更穩定）
   formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
   experimentalFeatures: {
     useBarCodeDetectorIfSupported: true
   }
 };
 
+// 強制選擇後置相機
 Html5Qrcode.getCameras().then(cameras => {
-  if (cameras.length === 0) {
-    alert("未偵測到相機");
-    return;
-  }
+  if (cameras && cameras.length) {
+    // 優先選擇 label 包含 "back" 或 "environment" 的相機
+    let camera = cameras.find(cam => 
+      cam.label && (cam.label.toLowerCase().includes("back") || cam.label.toLowerCase().includes("environment"))
+    );
+    if (!camera) camera = cameras.find(cam => cam.facingMode === "environment");
+    if (!camera) camera = cameras[0];  // 最後保底選第一個
 
-  scanner = new Html5Qrcode("qr-reader");
-  scanner.start(
-    { facingMode: "environment" },
-    config,
-    onScan,
-    () => {}  // 錯誤訊息忽略
-  ).catch(err => {
-    alert("無法啟動相機：" + err);
-  });
+    const cameraId = camera.id || { facingMode: "environment" };
+
+    scanner = new Html5Qrcode("qr-reader");
+    scanner.start(
+      cameraId,      // ← 這裡強制指定後置相機
+      config,
+      onScan,
+      () => {}
+    ).catch(err => {
+      alert("無法啟動相機：" + err);
+    });
+  } else {
+    alert("未偵測到相機");
+  }
 }).catch(err => {
-  alert("無法取得相機權限");
+  alert("請允許相機權限");
 });
 </script>
 </body>
