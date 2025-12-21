@@ -4,32 +4,28 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>驗票系統</title>
-
 <style>
 html, body {
   margin: 0;
   padding: 0;
   height: 100%;
   background: black;
+  overflow: hidden;
 }
-
 #camera-container {
   position: relative;
   width: 100vw;
   height: 100svh;
 }
-
 #qr-reader {
   width: 100%;
   height: 100%;
 }
-
 #qr-reader video {
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
 }
-
 #scan-overlay {
   position: absolute;
   inset: 0;
@@ -38,14 +34,13 @@ html, body {
   justify-content: center;
   pointer-events: none;
 }
-
 .scan-box {
-  width: 260px;
-  height: 260px;
-  border: 3px solid #00ff88;
-  border-radius: 12px;
+  width: 280px;
+  height: 280px;
+  border: 4px solid #00ff88;
+  border-radius: 16px;
+  box-shadow: 0 0 30px rgba(0, 255, 136, 0.6);
 }
-
 #modal {
   position: absolute;
   inset: 0;
@@ -56,16 +51,15 @@ html, body {
   font-weight: bold;
   color: white;
   z-index: 20;
+  flex-direction: column;
+  gap: 20px;
 }
-
-#modal.success { background: rgba(0,160,0,.9); }
-#modal.error   { background: rgba(180,0,0,.9); }
-
-.vip { color: gold; font-size: 42px; }
-.normal { font-size: 32px; }
+#modal.success { background: rgba(0, 160, 0, 0.92); }
+#modal.error { background: rgba(180, 0, 0, 0.92); }
+.vip { color: gold; font-size: 48px; }
+.normal { font-size: 36px; }
 </style>
 </head>
-
 <body>
 <div id="camera-container">
   <div id="qr-reader"></div>
@@ -75,7 +69,7 @@ html, body {
   <div id="modal"></div>
 </div>
 
-<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 /**********************
  * 設定
@@ -83,105 +77,130 @@ html, body {
 const API_URL = "https://script.google.com/macros/s/AKfycbz4JomfGpFnOJYwcAJTyMiEulVqtlPHQNx9rID7Ixo7I5zReBqMBdrn_JSxdCHxQjbT/exec";
 const modal = document.getElementById("modal");
 
-/**********************
- * 狀態
- **********************/
 let scanner;
 let locked = false;
-let finished = false;
+let lastScanTime = 0;
 
 /**********************
- * UI
+ * 震動函數（支援 Android 與 iPhone）
  **********************/
-function showSuccess(result) {
-  finished = true;
-
-  modal.className = "success";
-  modal.style.display = "flex";
-  modal.innerHTML = result.vip
-    ? `<div class="vip">VIP<br>入場成功</div>`
-    : `<div class="normal">入場成功</div>`;
-
-  setTimeout(reset, 1200);
+function vibrateSuccess() {
+  // 成功：長震 300ms
+  if (navigator.vibrate) {
+    navigator.vibrate(300);
+  }
 }
 
-function showError(message = "無效票券<br>或已使用") {
-  if (finished) return;
+function vibrateError() {
+  // 失敗：短震兩下（100ms + 間隔 100ms + 100ms）
+  if (navigator.vibrate) {
+    navigator.vibrate([100, 100, 100]);
+  }
+}
 
-  finished = true;
+/**********************
+ * UI 顯示 + 震動
+ **********************/
+function showSuccess(isVip) {
+  vibrateSuccess();  // ← 成功震動
+  modal.className = "success";
+  modal.style.display = "flex";
+  modal.innerHTML = isVip
+    ? `<div class="vip">VIP<br>入場成功 ✓</div>`
+    : `<div class="normal">入場成功 ✓</div>`;
+  setTimeout(resetScanner, 800);
+}
+
+function showError(message = "無效或已使用") {
+  vibrateError();  // ← 失敗震動
   modal.className = "error";
   modal.style.display = "flex";
   modal.innerHTML = `<div class="normal">${message}</div>`;
-
-  setTimeout(reset, 1200);
+  setTimeout(resetScanner, 800);
 }
 
 /**********************
- * 重置掃描
+ * 重啟掃描（相機持續開著）
  **********************/
-function reset() {
+function resetScanner() {
   modal.style.display = "none";
   locked = false;
-  finished = false;
+}
 
+/**********************
+ * API 處理
+ **********************/
+async function verifyTicket(id) {
+  try {
+    const res = await fetch(API_URL + "?id=" + encodeURIComponent(id), {
+      cache: "no-cache"
+    });
+    const result = await res.json();
+
+    if (result.status === "OK") {
+      showSuccess(result.vip);
+    } else if (result.status === "USED") {
+      showError("票券已使用");
+    } else if (result.status === "DUPLICATE") {
+      // 剛驗過的同一張，不顯示不震動
+    } else {
+      showError();
+    }
+  } catch (err) {
+    vibrateError();
+    showError("網路錯誤");
+  }
+}
+
+/**********************
+ * 掃描成功回調
+ **********************/
+function onScan(decodedText) {
+  const now = Date.now();
+  
+  // 防抖：同一張票 1 秒內不重複處理
+  if (now - lastScanTime < 1000 && decodedText === scanner.lastScanned) return;
+  
+  if (locked) return;
+  locked = true;
+  lastScanTime = now;
+  scanner.lastScanned = decodedText;
+
+  verifyTicket(decodedText.trim());
+}
+
+/**********************
+ * 啟動掃描器（最佳效能）
+ **********************/
+const config = {
+  fps: 30,
+  qrbox: { width: 260, height: 260 },
+  aspectRatio: 1,
+  disableFlip: false,
+  formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+  experimentalFeatures: {
+    useBarCodeDetectorIfSupported: true
+  }
+};
+
+Html5Qrcode.getCameras().then(cameras => {
+  if (cameras.length === 0) {
+    alert("未偵測到相機");
+    return;
+  }
+
+  scanner = new Html5Qrcode("qr-reader");
   scanner.start(
     { facingMode: "environment" },
-    { fps: 10 },
-    onScan
-  );
-}
-
-/**********************
- * API 回傳處理
- **********************/
-function handleResult(result) {
-  if (!result || !result.status) {
-    showError();
-    return;
-  }
-
-  if (result.status === "OK") {
-    showSuccess(result);
-    return;
-  }
-
-  if (result.status === "USED") {
-    showError("票券已使用");
-    return;
-  }
-
-  if (result.status === "DUPLICATE") {
-    // 同一張剛成功驗過，不顯示錯誤
-    return;
-  }
-
-  showError();
-}
-
-/**********************
- * 掃描成功
- **********************/
-function onScan(text) {
-  if (locked || finished) return;
-
-  locked = true;
-  scanner.stop(); // 🔴 關鍵：成功掃到後立刻停掉鏡頭
-
-  fetch(API_URL + "?id=" + encodeURIComponent(text))
-    .then(res => res.json())
-    .then(handleResult)
-    .catch(() => showError("系統錯誤"));
-}
-
-/**********************
- * 啟動
- **********************/
-scanner = new Html5Qrcode("qr-reader");
-scanner.start(
-  { facingMode: "environment" },
-  { fps: 10 },
-  onScan
-);
+    config,
+    onScan,
+    () => {}  // 錯誤訊息忽略
+  ).catch(err => {
+    alert("無法啟動相機：" + err);
+  });
+}).catch(err => {
+  alert("無法取得相機權限");
+});
 </script>
 </body>
 </html>
