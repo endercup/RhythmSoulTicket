@@ -42,7 +42,7 @@ html, body {
   box-shadow: 0 0 30px rgba(0, 255, 136, 0.6);
 }
 
-/* 全螢幕結果覆蓋層（純黑背景） */
+/* 全螢幕純黑結果畫面 */
 #full-result {
   position: absolute;
   inset: 0;
@@ -53,7 +53,7 @@ html, body {
   font-weight: bold;
   color: white;
   z-index: 30;
-  background: black; /* 純黑背景 */
+  background: black;
 }
 .vip {
   color: gold;
@@ -76,7 +76,7 @@ html, body {
     <div class="scan-box"></div>
   </div>
 
-  <!-- 全黑結果畫面，停留 1 秒 -->
+  <!-- 全黑結果畫面，停留 2 秒 -->
   <div id="full-result"></div>
 </div>
 
@@ -103,7 +103,7 @@ function vibrateError() {
 }
 
 /**********************
- * 顯示全黑結果畫面（停留 1000ms = 1秒）
+ * 顯示全黑結果畫面（停留 2000ms = 2秒）
  **********************/
 function showFullResult(isSuccess, isVip = false, message = "") {
   if (isSuccess) {
@@ -123,8 +123,8 @@ function showFullResult(isSuccess, isVip = false, message = "") {
 
   setTimeout(() => {
     fullResult.style.display = "none";
-    locked = false;  // 1秒後解鎖，繼續可掃下一張
-  }, 3000);
+    locked = false;  // 2秒後解鎖，可掃下一張
+  }, 2000);  // ← 改成 2 秒
 }
 
 /**********************
@@ -140,8 +140,7 @@ async function verifyTicket(id) {
     } else if (result.status === "USED") {
       showFullResult(false, false, "票券已使用");
     } else if (result.status === "DUPLICATE") {
-      // 剛驗過的同一張，不顯示任何東西
-      locked = false;
+      locked = false;  // 同一張剛驗過，直接解鎖不顯示
     } else {
       showFullResult(false);
     }
@@ -152,13 +151,13 @@ async function verifyTicket(id) {
 }
 
 /**********************
- * 掃描成功
+ * 掃描成功回調（防彈跳時間縮短為 500ms）
  **********************/
 function onScan(decodedText) {
   const now = Date.now();
   
-  // 防抖：同一張票 1 秒內不重複處理
-  if (now - lastScanTime < 5000 && decodedText === scanner.lastScanned) return;
+  // 防抖：同一張票在 500ms 內不重複處理（更靈敏）
+  if (now - lastScanTime < 500 && decodedText === scanner.lastScanned) return;
   
   if (locked) return;
   locked = true;
@@ -175,28 +174,27 @@ const config = {
   fps: 30,
   qrbox: { width: 260, height: 260 },
   aspectRatio: 1,
-  disableFlip: true,  // 禁止鏡像翻轉（更穩定）
+  disableFlip: true,
   formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
   experimentalFeatures: {
     useBarCodeDetectorIfSupported: true
   }
 };
 
-// 強制選擇後置相機
+// 強制使用後置相機
 Html5Qrcode.getCameras().then(cameras => {
   if (cameras && cameras.length) {
-    // 優先選擇 label 包含 "back" 或 "environment" 的相機
     let camera = cameras.find(cam => 
       cam.label && (cam.label.toLowerCase().includes("back") || cam.label.toLowerCase().includes("environment"))
     );
     if (!camera) camera = cameras.find(cam => cam.facingMode === "environment");
-    if (!camera) camera = cameras[0];  // 最後保底選第一個
+    if (!camera) camera = cameras[0];
 
     const cameraId = camera.id || { facingMode: "environment" };
 
     scanner = new Html5Qrcode("qr-reader");
     scanner.start(
-      cameraId,      // ← 這裡強制指定後置相機
+      cameraId,
       config,
       onScan,
       () => {}
