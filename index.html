@@ -85,7 +85,9 @@ let resolved = false;
 function showSuccess(result) {
   modal.className = "success";
   modal.style.display = "flex";
-  modal.innerHTML = result.vip
+  const vipVal = result && result.vip;
+  const isVip = vipVal === true || vipVal === 1 || vipVal === '1' || String(vipVal).toLowerCase() === 'true';
+  modal.innerHTML = isVip
     ? `<div class="vip">VIP<br>入場成功</div>`
     : `<div class="normal">入場成功</div>`;
 
@@ -110,10 +112,19 @@ function reset() {
 function handleResult(result) {
   if (resolved) return;
 
-  if (result.status == "OK") {
-    resolved = true;
-    showSuccess(result);
-    return;
+  // 支援 API 回傳陣列或物件
+  if (Array.isArray(result) && result.length) result = result[0];
+
+  console.log('handleResult =>', result);
+
+  const rawStatus = result && (result.status || result.Status || result.code || result.result);
+  if (rawStatus !== undefined) {
+    const s = typeof rawStatus === 'string' ? rawStatus.toUpperCase() : rawStatus;
+    if (s === 'OK' || s === 'TRUE' || s === 1 || s === true) {
+      resolved = true;
+      showSuccess(result);
+      return;
+    }
   }
 
   // 只有在「還沒成功過」的情況下才顯示錯誤
