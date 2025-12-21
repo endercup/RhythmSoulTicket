@@ -124,7 +124,7 @@ function showFullResult(isSuccess, isVip = false, message = "") {
   setTimeout(() => {
     fullResult.style.display = "none";
     locked = false;  // 1秒後解鎖，繼續可掃下一張
-  }, 5000);
+  }, 3000);
 }
 
 /**********************
@@ -158,7 +158,7 @@ function onScan(decodedText) {
   const now = Date.now();
   
   // 防抖：同一張票 1 秒內不重複處理
-  if (now - lastScanTime < 3000 && decodedText === scanner.lastScanned) return;
+  if (now - lastScanTime < 5000 && decodedText === scanner.lastScanned) return;
   
   if (locked) return;
   locked = true;
