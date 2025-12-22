@@ -26,6 +26,8 @@ html, body {
   height: 100% !important;
   object-fit: cover !important;
 }
+
+/* 只保留我們自己的固定綠色大框（可選：如果你不想看到兩個框疊加，可以刪除下面這段） */
 #scan-overlay {
   position: absolute;
   inset: 0;
@@ -35,7 +37,6 @@ html, body {
   pointer-events: none;
   z-index: 10;
 }
-/* 固定綠色掃描框（穩定不閃） */
 .scan-box {
   width: 300px;
   height: 300px;
@@ -43,18 +44,6 @@ html, body {
   border-radius: 20px;
   box-shadow: 0 0 40px rgba(0, 255, 136, 0.8);
   background: transparent;
-}
-
-/* 徹底隱藏 html5-qrcode 所有內建視覺元素（四角綠白線、陰影、laser 等） */
-#qr-reader > div,
-#qr-reader canvas,
-#qr-reader .qr-shaded-region,
-#qr-reader [class*="qr-"],
-#qr-reader [style*="border"],
-#qr-reader [style*="position: absolute"] {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
 }
 
 #full-result {
@@ -86,6 +75,7 @@ html, body {
 <body>
 <div id="camera-container">
   <div id="qr-reader"></div>
+  <!-- 固定綠色外框（可保留或刪除，如果你只想看內建的閃爍框，可以刪除這整段） -->
   <div id="scan-overlay">
     <div class="scan-box"></div>
   </div>
@@ -124,7 +114,7 @@ function showFullResult(isSuccess, isVip = false, message = "") {
 
   setTimeout(() => {
     fullResult.style.display = "none";
-    locked = false;  // 0.5 秒後解鎖，可立即掃下一張
+    locked = false;
   }, 500);
 }
 
@@ -149,7 +139,7 @@ async function verifyTicket(id) {
   }
 }
 
-/* 掃描回調 - 防重複間隔 50ms（極快） */
+/* 掃描回調 - 防重複間隔 50ms */
 function onScan(decodedText) {
   const now = Date.now();
   
@@ -163,43 +153,27 @@ function onScan(decodedText) {
   verifyTicket(decodedText.trim());
 }
 
-/* 掃描設定 */
+/* 掃描設定 - 恢復內建閃爍框 */
 const config = {
   fps: 35,
   qrbox: { width: 280, height: 280 },
   aspectRatio: 1,
-  disableFlip: true,
+  disableFlip: false,  // 允許鏡像（前鏡頭需要）
   formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
   experimentalFeatures: {
     useBarCodeDetectorIfSupported: true
   }
 };
 
-/* 強制使用後置相機 */
-Html5Qrcode.getCameras().then(cameras => {
-  if (cameras && cameras.length) {
-    let camera = cameras.find(cam => 
-      cam.label && (cam.label.toLowerCase().includes("back") || cam.label.toLowerCase().includes("environment"))
-    );
-    if (!camera) camera = cameras.find(cam => cam.facingMode === "environment");
-    if (!camera) camera = cameras[0];
-
-    const cameraId = camera.id || { facingMode: "environment" };
-
-    scanner = new Html5Qrcode("qr-reader");
-    scanner.start(
-      cameraId,
-      config,
-      onScan,
-      () => {}
-    ).catch(err => {
-      alert("無法啟動相機：" + err);
-    });
-  } else {
-    alert("未偵測到相機");
-  }
-}).catch(err => {
-  alert("請允許相機權限");
+/* 不鎖定相機 - 使用預設後置，但允許切換或系統自動選擇 */
+scanner = new Html5Qrcode("qr-reader");
+scanner.start(
+  { facingMode: "environment" },  // 預設後置，但不會強制（手機允許時可切換）
+  config,
+  onScan,
+  () => {}
+).catch(err => {
+  alert("無法啟動相機：" + err);
 });
 </script>
 </body>
