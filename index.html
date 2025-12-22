@@ -26,8 +26,7 @@ html, body {
   height: 100% !important;
   object-fit: cover !important;
 }
-
-/* 只保留我們自己的固定綠色大框（可選：如果你不想看到兩個框疊加，可以刪除下面這段） */
+/* 固定綠色大框 */
 #scan-overlay {
   position: absolute;
   inset: 0;
@@ -45,7 +44,6 @@ html, body {
   box-shadow: 0 0 40px rgba(0, 255, 136, 0.8);
   background: transparent;
 }
-
 #full-result {
   position: absolute;
   inset: 0;
@@ -75,27 +73,30 @@ html, body {
 <body>
 <div id="camera-container">
   <div id="qr-reader"></div>
-  <!-- 固定綠色外框（可保留或刪除，如果你只想看內建的閃爍框，可以刪除這整段） -->
+  <!-- 固定綠色外框 -->
   <div id="scan-overlay">
     <div class="scan-box"></div>
   </div>
   <div id="full-result"></div>
 </div>
 
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<!-- 使用最新版 html5-qrcode（建議） -->
+<script src="https://unpkg.com/html5-qrcode@latest"></script>
+
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbz4JomfGpFnOJYwcAJTyMiEulVqtlPHQNx9rID7Ixo7I5zReBqMBdrn_JSxdCHxQjbT/exec";
 const fullResult = document.getElementById("full-result");
 
 let scanner;
-let locked = false;
-let lastScanTime = 0;
+let locked = false;              // 是否正在處理驗證中
+let lastProcessedCode = null;    // 上一次實際處理過的條碼（關鍵防重複）
+let lastScanTime = 0;            // 上一次掃描回調時間（過濾庫的快速重複）
 
 /* 震動回饋 */
 function vibrateSuccess() { if (navigator.vibrate) navigator.vibrate(300); }
 function vibrateError() { if (navigator.vibrate) navigator.vibrate([100, 100, 100]); }
 
-/* 全黑結果畫面 - 只顯示 500ms */
+/* 全黑結果畫面 - 顯示 500ms */
 function showFullResult(isSuccess, isVip = false, message = "") {
   if (isSuccess) {
     vibrateSuccess();
@@ -109,19 +110,19 @@ function showFullResult(isSuccess, isVip = false, message = "") {
       <div class="normal">${message || '無效或已使用'}</div>
     `;
   }
-
   fullResult.style.display = "flex";
-
   setTimeout(() => {
     fullResult.style.display = "none";
-    locked = false;
+    locked = false;  // 500ms 後一定解鎖
   }, 500);
 }
 
 /* API 驗證 */
 async function verifyTicket(id) {
   try {
-    const res = await fetch(API_URL + "?id=" + encodeURIComponent(id), { cache: "no-cache" });
+    const res = await fetch(API_URL + "?id=" + encodeURIComponent(id), { 
+      cache: "no-cache"
+    });
     const result = await res.json();
 
     if (result.status === "OK") {
@@ -129,49 +130,64 @@ async function verifyTicket(id) {
     } else if (result.status === "USED") {
       showFullResult(false, false, "票券已使用");
     } else if (result.status === "DUPLICATE") {
-      locked = false;
+      locked = false;  // 重複掃同張票，直接解鎖不顯示
     } else {
       showFullResult(false);
     }
   } catch (err) {
     vibrateError();
     showFullResult(false, false, "網路錯誤");
+    locked = false;  // 錯誤時也要解鎖
   }
 }
 
-/* 掃描回調 - 防重複間隔 50ms */
+/* 掃描成功回調 - 多層防重複機制 */
 function onScan(decodedText) {
   const now = Date.now();
-  
-  if (now - lastScanTime < 50 && decodedText === scanner.lastScanned) return;
-  
-  if (locked) return;
+  const code = decodedText.trim();
+
+  // 1. 過濾極短時間內的相同回調（庫本身會快速重複呼叫）
+  if (now - lastScanTime < 80 && code === lastProcessedCode) {
+    return;
+  }
+
+  // 2. 正在處理前一個驗證，直接忽略
+  if (locked) {
+    return;
+  }
+
+  // 3. 和上一次實際處理過的條碼完全一樣，直接忽略（避免條碼沒移開就重複觸發）
+  if (code === lastProcessedCode) {
+    return;
+  }
+
+  // 全部通過 → 這是一個真正的新條碼
   locked = true;
   lastScanTime = now;
-  scanner.lastScanned = decodedText;
+  lastProcessedCode = code;
 
-  verifyTicket(decodedText.trim());
+  verifyTicket(code);
 }
 
-/* 掃描設定 - 恢復內建閃爍框 */
+/* 掃描設定 */
 const config = {
   fps: 35,
   qrbox: { width: 280, height: 280 },
   aspectRatio: 1,
-  disableFlip: false,  // 允許鏡像（前鏡頭需要）
+  disableFlip: false,
   formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
   experimentalFeatures: {
     useBarCodeDetectorIfSupported: true
   }
 };
 
-/* 不鎖定相機 - 使用預設後置，但允許切換或系統自動選擇 */
+/* 啟動掃描器 */
 scanner = new Html5Qrcode("qr-reader");
 scanner.start(
-  { facingMode: "environment" },  // 預設後置，但不會強制（手機允許時可切換）
+  { facingMode: "environment" },  // 優先後置鏡頭
   config,
   onScan,
-  () => {}
+  () => {}  // 錯誤回調（可留空）
 ).catch(err => {
   alert("無法啟動相機：" + err);
 });
