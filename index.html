@@ -80,17 +80,14 @@ html, body {
   <div id="full-result"></div>
 </div>
 
-<!-- 使用最新版 html5-qrcode（建議） -->
 <script src="https://unpkg.com/html5-qrcode@latest"></script>
-
 <script>
-const API_URL = "https://script.google.com/macros/s/AKfycbwslsskFuRW1QP_RG3rbIEnsBVErWTQ6dxBiLKY2xkFzHHdR8rU1H1XWpjkPc_J_vt2/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbww-Mxw-aoWQ5dIYGNc7teyL7sPZDKtLdczzOCS-qA92ZzQeMAwtJLMEvIibY4z6OEF/exec";
 const fullResult = document.getElementById("full-result");
-
 let scanner;
-let locked = false;              // 是否正在處理驗證中
-let lastProcessedCode = null;    // 上一次實際處理過的條碼（關鍵防重複）
-let lastScanTime = 0;            // 上一次掃描回調時間（過濾庫的快速重複）
+let locked = false;
+let lastProcessedCode = null;
+let lastScanTime = 0;
 
 /* 震動回饋 */
 function vibrateSuccess() { if (navigator.vibrate) navigator.vibrate(300); }
@@ -113,55 +110,53 @@ function showFullResult(isSuccess, isVip = false, message = "") {
   fullResult.style.display = "flex";
   setTimeout(() => {
     fullResult.style.display = "none";
-    locked = false;  // 500ms 後一定解鎖
+    locked = false;
   }, 500);
 }
 
-/* API 驗證 */
+/* 根據條碼前三位判斷是否為 VIP */
+function isVipFromCode(code) {
+  if (typeof code !== 'string') return false;
+  const prefix = code.trim().substring(0, 3).toUpperCase();
+  return prefix === 'VIP';
+}
+
+/* API 驗證（只負責檢查票券有效性，不再返回 vip 欄位） */
 async function verifyTicket(id) {
   try {
-    const res = await fetch(API_URL + "?id=" + encodeURIComponent(id), { 
+    const res = await fetch(API_URL + "?id=" + encodeURIComponent(id), {
       cache: "no-cache"
     });
     const result = await res.json();
 
+    // 這裡只看後端回傳的狀態，VIP 顯示由前端自行判斷
     if (result.status === "OK") {
-      showFullResult(true, result.vip);
+      const vip = isVipFromCode(id);
+      showFullResult(true, vip);
     } else if (result.status === "USED") {
       showFullResult(false, false, "票券已使用");
     } else if (result.status === "DUPLICATE") {
-      locked = false;  // 重複掃同張票，直接解鎖不顯示
+      locked = false; // 同張票重複掃描，直接解鎖不顯示
     } else {
       showFullResult(false);
     }
   } catch (err) {
     vibrateError();
     showFullResult(false, false, "網路錯誤");
-    locked = false;  // 錯誤時也要解鎖
+    locked = false;
   }
 }
 
-/* 掃描成功回調 - 多層防重複機制 */
+/* 掃描成功回調 */
 function onScan(decodedText) {
   const now = Date.now();
   const code = decodedText.trim();
 
-  // 1. 過濾極短時間內的相同回調（庫本身會快速重複呼叫）
-  if (now - lastScanTime < 80 && code === lastProcessedCode) {
-    return;
-  }
+  // 防重複機制
+  if (now - lastScanTime < 80 && code === lastProcessedCode) return;
+  if (locked) return;
+  if (code === lastProcessedCode) return;
 
-  // 2. 正在處理前一個驗證，直接忽略
-  if (locked) {
-    return;
-  }
-
-  // 3. 和上一次實際處理過的條碼完全一樣，直接忽略（避免條碼沒移開就重複觸發）
-  if (code === lastProcessedCode) {
-    return;
-  }
-
-  // 全部通過 → 這是一個真正的新條碼
   locked = true;
   lastScanTime = now;
   lastProcessedCode = code;
@@ -184,10 +179,10 @@ const config = {
 /* 啟動掃描器 */
 scanner = new Html5Qrcode("qr-reader");
 scanner.start(
-  { facingMode: "environment" },  // 優先後置鏡頭
+  { facingMode: "environment" },
   config,
   onScan,
-  () => {}  // 錯誤回調（可留空）
+  () => {}
 ).catch(err => {
   alert("無法啟動相機：" + err);
 });
