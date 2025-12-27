@@ -82,7 +82,7 @@ html, body {
 
 <script src="https://unpkg.com/html5-qrcode@latest"></script>
 <script>
-const API_URL = "https://script.google.com/macros/s/AKfycbww-Mxw-aoWQ5dIYGNc7teyL7sPZDKtLdczzOCS-qA92ZzQeMAwtJLMEvIibY4z6OEF/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwslsskFuRW1QP_RG3rbIEnsBVErWTQ6dxBiLKY2xkFzHHdR8rU1H1XWpjkPc_J_vt2/exec";
 const fullResult = document.getElementById("full-result");
 let scanner;
 let locked = false;
@@ -90,10 +90,10 @@ let lastProcessedCode = null;
 let lastScanTime = 0;
 
 /* 震動回饋 */
-function vibrateSuccess() { if (navigator.vibrate) navigator.vibrate(300); }
-function vibrateError() { if (navigator.vibrate) navigator.vibrate([100, 100, 100]); }
+function vibrateSuccess() { if (navigator.vibrate) navigator.vibrate(400); }  // 稍長一點
+function vibrateError() { if (navigator.vibrate) navigator.vibrate([150, 100, 150]); }
 
-/* 全黑結果畫面 - 顯示 500ms */
+/* 全黑結果畫面 - 顯示 1.5 秒 */
 function showFullResult(isSuccess, isVip = false, message = "") {
   if (isSuccess) {
     vibrateSuccess();
@@ -108,10 +108,12 @@ function showFullResult(isSuccess, isVip = false, message = "") {
     `;
   }
   fullResult.style.display = "flex";
+
+  // 改為 1500ms（1.5秒）後隱藏並解鎖
   setTimeout(() => {
     fullResult.style.display = "none";
     locked = false;
-  }, 500);
+  }, 1500);
 }
 
 /* 根據條碼前三位判斷是否為 VIP */
@@ -121,7 +123,7 @@ function isVipFromCode(code) {
   return prefix === 'VIP';
 }
 
-/* API 驗證（只負責檢查票券有效性，不再返回 vip 欄位） */
+/* API 驗證 */
 async function verifyTicket(id) {
   try {
     const res = await fetch(API_URL + "?id=" + encodeURIComponent(id), {
@@ -129,7 +131,6 @@ async function verifyTicket(id) {
     });
     const result = await res.json();
 
-    // 這裡只看後端回傳的狀態，VIP 顯示由前端自行判斷
     if (result.status === "OK") {
       const vip = isVipFromCode(id);
       showFullResult(true, vip);
@@ -152,7 +153,7 @@ function onScan(decodedText) {
   const now = Date.now();
   const code = decodedText.trim();
 
-  // 防重複機制
+  // 多層防重複機制
   if (now - lastScanTime < 80 && code === lastProcessedCode) return;
   if (locked) return;
   if (code === lastProcessedCode) return;
